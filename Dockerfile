@@ -6,61 +6,13 @@ USER root
 
 RUN apt-get update -qq && \
   apt-get --no-install-suggests install -y git autoconf libtool-bin g++ zlib1g-dev libjpeg-dev pkg-config libsqlite3-dev libcurl4-gnutls-dev libpcre3 libpcre3-dev libspeexdsp-dev libspeex-dev libldns-dev  libedit-dev libtiff-dev make yasm
-
-RUN git clone https://github.com/RodrigoAS28/freeswitch.git
+ 
+ADD . freeswitch
 WORKDIR freeswitch
-RUN git checkout end_conf_behaviour
 RUN ./bootstrap.sh
 RUN ./configure
 RUN make mod_conference
 
+FROM roddocker/freeswitch1.9_beta
 
-FROM ${FROM_REPO}:${FROM_TAG}
-
-ARG FREESWITCH_REPO_VERSION=1.8
-ARG KAZOO_FREESWITCH_VERSION=4.3.1
-ARG FREESWITCH_VERSION=1.10.2
-ARG FREESWITCH_USER_UID=60031
-
-ENV CFG_DIR /etc/kazoo/freeswitch
-ENV HEP_CFG_DIR /etc/captagent
-
-USER root
-
-RUN groupadd -r freeswitch -g ${FREESWITCH_USER_UID} && useradd --no-create-home --shell /bin/false -g freeswitch -u ${FREESWITCH_USER_UID} freeswitch
-
-RUN curl https://files.freeswitch.org/repo/deb/freeswitch-$FREESWITCH_REPO_VERSION/fsstretch-archive-keyring.asc | apt-key add - &&\
-  echo "deb http://files.freeswitch.org/repo/deb/freeswitch-$FREESWITCH_REPO_VERSION/ stretch main" > /etc/apt/sources.list.d/freeswitch.list &&\
-  apt-get update -qq && \
-  apt-get --no-install-suggests install -y apt-transport-https gnupg libexpat1 libpcap0.8 \
-  freeswitch=${FREESWITCH_VERSION}* freeswitch-timezones \
-  freeswitch-mod-commands freeswitch-mod-conference freeswitch-mod-console freeswitch-mod-logfile freeswitch-mod-dptools freeswitch-mod-dialplan-xml \
-  freeswitch-mod-event-socket freeswitch-mod-http-cache freeswitch-mod-local-stream freeswitch-mod-loopback freeswitch-mod-say-en \
-  freeswitch-mod-sndfile freeswitch-mod-sofia freeswitch-mod-tone-stream freeswitch-mod-expr freeswitch-mod-av \
-  freeswitch-mod-opus freeswitch-mod-shout freeswitch-mod-amr freeswitch-sounds-en-us* \
-  erlang-base captagent
-
-RUN cd /tmp && \
-  apt-get download freeswitch-mod-kazoo && \
-  dpkg -x freeswitch-mod-kazoo* . && \
-  mv usr/lib/freeswitch/mod/mod_kazoo.so /usr/lib/freeswitch/mod/ && \
-  curl --silent -L -o /tmp/kazoo-configs-freeswitch-$KAZOO_FREESWITCH_VERSION.tar.gz https://github.com/2600hz/kazoo-configs-freeswitch/archive/$KAZOO_FREESWITCH_VERSION.tar.gz && \
-  tar -C /tmp -xvf /tmp/kazoo-configs-freeswitch-$KAZOO_FREESWITCH_VERSION.tar.gz && \
-  mkdir -p /etc/kazoo  && \
-  mv /tmp/kazoo-configs-freeswitch-$KAZOO_FREESWITCH_VERSION/freeswitch /etc/kazoo && \
-  mv /tmp/kazoo-configs-freeswitch-$KAZOO_FREESWITCH_VERSION/system/sbin/kazoo-freeswitch /usr/bin && \
-  rm $CFG_DIR/sip_profiles/*.xml && rm $CFG_DIR/freeswitch.xml && \
-  rm $CFG_DIR/autoload_configs/kazoo.conf.xml && rm $CFG_DIR/autoload_configs/switch.conf.xml && rm $CFG_DIR/autoload_configs/syslog.conf.xml && rm $CFG_DIR/autoload_configs/modules.conf.xml  && \
-  rm $HEP_CFG_DIR/transport_hep.xml && rm $HEP_CFG_DIR/socket_pcap.xml && \
-  mkdir -p /var/log/freeswitch && \
-  mkdir -p /var/lib/kazoo-freeswitch/db && mkdir -p /var/lib/kazoo-freeswitch/cache && mkdir -p /var/lib/kazoo-freeswitch/storage \
-  mkdir -p /usr/share/kazoo-freeswitch/sounds && \
-  mkdir -p /var/run/freeswitch && \
-  chown -R freeswitch:freeswitch /var/log/freeswitch /var/lib/kazoo-freeswitch/db /var/lib/kazoo-freeswitch/cache /var/lib/kazoo-freeswitch/storage /usr/share/kazoo-freeswitch/sounds /var/run/freeswitch && \
-  apt-get autoclean && apt-get --purge -y autoremove && \
-  rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
-
-USER freeswitch
-
-COPY --from=builder /home/tduser/freeswitch/src/mod/applications/mod_conference/.lib/mod_conference.so /usr/lib/freeswitch/mod/
-CMD exec /usr/bin/kazoo-freeswitch ${ARGS}
+COPY --from=builder /home/tduser/freeswitch/src/mod/applications/mod_conference/.libs/mod_conference.so /usr/lib/freeswitch/mod/
